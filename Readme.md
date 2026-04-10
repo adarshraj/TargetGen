@@ -85,7 +85,7 @@ The current report format is plain stdout text. The exit code is always 0; there
 
 ## Input XML — key fields
 
-See `input/input.xml` for a worked example.
+See `input/input.xml` for a worked example. The namespace declaration on the root element is optional: `<componentInfo>…</componentInfo>` and `<inp:componentInfo xmlns:inp="http://in.adarshr.targetgen.input/input.xsd">…</inp:componentInfo>` both work. A SAX filter in `JaxbUtils.unmarshalAndValidate` injects the target namespace on the root when the input doesn't declare one, so older hand-written files that omit the prefix load cleanly.
 
 - `version` — the version interpolated into `$VERSION$` placeholders. For a customer minor-version run, this is the minor version being generated (e.g. `28.1`).
 - `createBasedOnReport` — `true` for the customer / minor-version flow (overlay the delivery report). `false` if the input XML is already authoritative.
