@@ -4,139 +4,108 @@ import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.Marshaller;
 import jakarta.xml.bind.Unmarshaller;
+import jakarta.xml.bind.annotation.XmlSchema;
+import org.xml.sax.Attributes;
+import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
+import org.xml.sax.XMLReader;
+import org.xml.sax.helpers.XMLFilterImpl;
 
 import javax.xml.XMLConstants;
-import javax.xml.stream.XMLOutputFactory;
-import javax.xml.stream.XMLStreamWriter;
-import javax.xml.transform.stream.StreamSource;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.parsers.SAXParserFactory;
+import javax.xml.transform.sax.SAXSource;
 import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
 import java.io.File;
-import java.io.StringReader;
 import java.io.StringWriter;
 
-/**
- * This class provides utility methods for JAXB operations.
- */
-public class JaxbUtils {
+public final class JaxbUtils {
 
-    /**
-     * Marshals the given object to XML.
-     *
-     * @param object the object to marshal
-     * @param clazz  the class of the object
-     * @param <T>    the type of the object
-     * @return the XML string
-     * @throws JAXBException if an error occurs during marshalling
-     */
-    public static <T> String marshal(T object, Class<T> clazz) throws JAXBException {
-        JAXBContext jaxbContext = JAXBContext.newInstance(clazz);
-        Marshaller jaxbMarshaller = jaxbContext.createMarshaller();
-        jaxbMarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-        StringWriter sw = new StringWriter();
-        jaxbMarshaller.marshal(object, sw);
-        return sw.toString();
+    private JaxbUtils() {
     }
 
-    /**
-     * Marshals the given object to XML with  instruction.
-     *
-     * @param object the object to marshal
-     * @param clazz  the class of the object
-     * @param <T>    the type of the object
-     * @return the XML string
-     * @throws JAXBException if an error occurs during marshalling
-     */
-    @SuppressWarnings("unused")
-    public static <T> String marshalWithPde(T object, Class<T> clazz) throws Exception {
-        JAXBContext jaxbContext = JAXBContext.newInstance(clazz);
-        Marshaller jaxbMarshaller = jaxbContext.createMarshaller();
-        jaxbMarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-        StringWriter sw = new StringWriter();
-        XMLOutputFactory xof = XMLOutputFactory.newFactory();
-        XMLStreamWriter streamWriter = xof.createXMLStreamWriter(sw);
-
-        streamWriter.writeStartDocument();
-        streamWriter.writeProcessingInstruction("pde", "version=\"3.8\"");
-        jaxbMarshaller.marshal(object, streamWriter);
-        streamWriter.writeEndDocument();
-
-        streamWriter.close();
-
-        return sw.toString();
-    }
-
-    /**
-     * Marshals the given object to XML with the given instruction.
-     *
-     * @param object the object to marshal
-     * @param clazz  the class of the object
-     * @param <T>    the type of the object
-     * @return the XML string
-     * @throws JAXBException if an error occurs during marshalling
-     */
     public static <T> String marshalWithInstruction(T object, Class<T> clazz) throws JAXBException {
-        String xml = marshal(object, clazz);
+        JAXBContext jaxbContext = JAXBContext.newInstance(clazz);
+        Marshaller marshaller = jaxbContext.createMarshaller();
+        marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+        StringWriter sw = new StringWriter();
+        marshaller.marshal(object, sw);
+        String xml = sw.toString();
         int insertIndex = xml.indexOf("?>") + 2;
-        String xmlString = xml.substring(0, insertIndex) + "\n" + "<?pde version=\"3.8\"?>" + xml.substring(insertIndex);
-        xmlString = xmlString.replaceAll("ns2:", "");
-        xmlString = xmlString.replaceAll("xmlns:ns2=\"http://in.adarshr.targetgen.output/output.xsd\"", "");
-        return xmlString;
+        String withInstruction = xml.substring(0, insertIndex) + "\n<?pde version=\"3.8\"?>" + xml.substring(insertIndex);
+        return withInstruction
+                .replace("ns2:", "")
+                .replace("xmlns:ns2=\"http://in.adarshr.targetgen.output/output.xsd\"", "");
     }
 
-    /**
-     * Unmarshal the given XML string to an object.
-     *
-     * @param xml   the XML string
-     * @param clazz the class of the object
-     * @param <T>   the type of the object
-     * @return the unmarshalled object
-     * @throws JAXBException if an error occurs during unmarshalling
-     */
-    @SuppressWarnings("unused")
-    public static <T> T unmarshal(String xml, Class<T> clazz) throws JAXBException {
-        JAXBContext jaxbContext = JAXBContext.newInstance(clazz);
-        Unmarshaller jaxbUnmarshaller = jaxbContext.createUnmarshaller();
-        StringReader reader = new StringReader(xml);
-        return clazz.cast(jaxbUnmarshaller.unmarshal(reader));
-    }
-
-    /**
-     * Unmarshal the given XML file to an object.
-     *
-     * @param xmlFile the XML file
-     * @param clazz   the class of the object
-     * @param <T>     the type of the object
-     * @return the unmarshalled object
-     * @throws JAXBException if an error occurs during unmarshalling
-     */
-    @SuppressWarnings("unused")
-    public static <T> T unmarshal(File xmlFile, Class<T> clazz) throws JAXBException {
-        JAXBContext jaxbContext = JAXBContext.newInstance(clazz);
-        Unmarshaller jaxbUnmarshaller = jaxbContext.createUnmarshaller();
-        return clazz.cast(jaxbUnmarshaller.unmarshal(xmlFile));
-    }
-
-    /**
-     * Unmarshal and validates the given XML file against the given XSD file to an object.
-     *
-     * @param xmlFile the XML file
-     * @param xsdFile the XSD file
-     * @param clazz   the class of the object
-     * @param <T>     the type of the object
-     * @return the unmarshalled and validated object
-     * @throws JAXBException if an error occurs during unmarshalling
-     * @throws SAXException  if an error occurs during validation
-     */
-    public static <T> T unmarshallAndValidate(File xmlFile, File xsdFile, Class<T> clazz)
+    public static <T> T unmarshalAndValidate(File xmlFile, File xsdFile, Class<T> clazz)
             throws JAXBException, SAXException {
         SchemaFactory sf = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
         Schema schema = sf.newSchema(xsdFile);
         JAXBContext jc = JAXBContext.newInstance(clazz);
         Unmarshaller unmarshaller = jc.createUnmarshaller();
         unmarshaller.setSchema(schema);
-        return unmarshaller.unmarshal(new StreamSource(xmlFile), clazz).getValue();
+
+        SAXSource source = namespaceLenientSource(xmlFile, namespaceOf(clazz));
+        return unmarshaller.unmarshal(source, clazz).getValue();
+    }
+
+    private static String namespaceOf(Class<?> clazz) {
+        Package pkg = clazz.getPackage();
+        if (pkg == null) {
+            return "";
+        }
+        XmlSchema schemaAnnotation = pkg.getAnnotation(XmlSchema.class);
+        return schemaAnnotation != null ? schemaAnnotation.namespace() : "";
+    }
+
+    private static SAXSource namespaceLenientSource(File xmlFile, String targetNamespace) throws JAXBException {
+        try {
+            SAXParserFactory spf = SAXParserFactory.newInstance();
+            spf.setNamespaceAware(true);
+            spf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            XMLReader xmlReader = spf.newSAXParser().getXMLReader();
+            RootNamespaceInjector filter = new RootNamespaceInjector(xmlReader, targetNamespace);
+            return new SAXSource(filter, new InputSource(xmlFile.toURI().toString()));
+        } catch (ParserConfigurationException | SAXException e) {
+            throw new JAXBException("Failed to set up namespace-lenient SAX parser", e);
+        }
+    }
+
+    /**
+     * SAX filter that injects the target namespace on the root element when the input
+     * provides none. Child elements pass through unchanged because the input schema uses
+     * elementFormDefault="unqualified" — only the root lives in the namespace.
+     */
+    private static final class RootNamespaceInjector extends XMLFilterImpl {
+
+        private final String targetNamespace;
+        private int depth = 0;
+
+        RootNamespaceInjector(XMLReader parent, String targetNamespace) {
+            super(parent);
+            this.targetNamespace = targetNamespace;
+        }
+
+        @Override
+        public void startElement(String uri, String localName, String qName, Attributes atts) throws SAXException {
+            String effectiveUri = uri;
+            if (depth == 0 && uri.isEmpty() && !targetNamespace.isEmpty()) {
+                effectiveUri = targetNamespace;
+            }
+            depth++;
+            super.startElement(effectiveUri, localName, qName, atts);
+        }
+
+        @Override
+        public void endElement(String uri, String localName, String qName) throws SAXException {
+            depth--;
+            String effectiveUri = uri;
+            if (depth == 0 && uri.isEmpty() && !targetNamespace.isEmpty()) {
+                effectiveUri = targetNamespace;
+            }
+            super.endElement(effectiveUri, localName, qName);
+        }
     }
 }

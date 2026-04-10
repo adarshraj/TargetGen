@@ -1,251 +1,148 @@
 package in.adarshr.targetgen.build;
 
-import in.adarshr.targetgen.bo.Repo;
-import in.adarshr.targetgen.dto.ComponentRepoVO;
-import in.adarshr.targetgen.dto.TargetVO;
-import in.adarshr.targetgen.utils.TargetUtils;
-import input.targetgen.adarshr.in.input.ComponentInfo;
-import input.targetgen.adarshr.in.input.SelectedGroups;
+import in.adarshr.targetgen.model.Repo;
+import in.adarshr.targetgen.model.Unit;
+import in.adarshr.targetgen.model.PipelineContext;
+import in.adarshr.targetgen.model.ResolvedComponent;
+import in.adarshr.targetgen.schema.input.ComponentInfo;
+import in.adarshr.targetgen.schema.input.SelectedGroups;
+import in.adarshr.targetgen.schema.output.ArchitectureType;
+import in.adarshr.targetgen.schema.output.Environment;
+import in.adarshr.targetgen.schema.output.LauncherArgs;
+import in.adarshr.targetgen.schema.output.Location;
+import in.adarshr.targetgen.schema.output.Locations;
+import in.adarshr.targetgen.schema.output.OperatingSystem;
+import in.adarshr.targetgen.schema.output.RepositoryLocation;
+import in.adarshr.targetgen.schema.output.Target;
+import in.adarshr.targetgen.schema.output.TargetJRE;
+import in.adarshr.targetgen.service.RepoUrlResolver;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import output.targetgen.adarshr.in.output.*;
 
-import java.util.*;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
-/**
- * This class is used to build the target
- */
+@Slf4j
 public class TargetBuilder {
 
-    private static final Logger LOG = LoggerFactory.getLogger(TargetBuilder.class);
+    private static final String COMPONENT_PLACEHOLDER = "$COMPONENT$";
+    private static final String VERSION_PLACEHOLDER = "$VERSION$";
 
-    /**
-     * This method is used to build the targets
-     *
-     * @param targetVO TargetVO
-     * @return Map<String, Target>
-     */
-    public Map<String, Target> buildTargets(TargetVO targetVO) {
-        Map<String, Target> targets = new HashMap<>();
-        Map<String, ComponentRepoVO> componentRepoMap = targetVO.getComponentRepoMap();
-        componentRepoMap.forEach((componentName, componentRepo) -> {
-            targetVO.setTargetName(TargetUtils.getTargetName(componentName, targetVO.getVersion()));
-            targetVO.setCurrentComponentName(componentName);
-            Target target = createTarget(targetVO);
-            targets.put(createTargetFileName(targetVO), target);
-        });
-
+    public Map<String, Target> buildTargets(PipelineContext ctx) {
+        Map<String, Target> targets = new LinkedHashMap<>();
+        for (ResolvedComponent component : ctx.components()) {
+            Target target = buildOneTarget(ctx, component);
+            targets.put(targetFileName(ctx, component.name()), target);
+        }
         return targets;
     }
 
-    /**
-     * This method is used to create the target file name
-     *
-     * @param targetVO TargetVO
-     * @return String
-     */
-    private String createTargetFileName(TargetVO targetVO) {
-        String targetNameFormatted = TargetUtils.getTargetNameFormatted(targetVO, targetVO.getTargetSaveFormat());
-        return targetNameFormatted + ".target";
-    }
-
-    /**
-     * This method is used to create the target
-     *
-     * @param targetVO TargetVO
-     * @return Target
-     */
-    private Target createTarget(TargetVO targetVO) {
-        ComponentInfo componentInfo = targetVO.getComponentInfo();
-        ObjectFactory ObjectFactory = new ObjectFactory();
-        Target target = ObjectFactory.createTarget();
-        target.setName(createTargetName(targetVO));
-        target.setIncludeMode(componentInfo.getTargetIncludeMode());
-        target.setSequenceNumber(componentInfo.getSequenceNumber());
-        target.setLauncherArgs(createLauncherArgs(componentInfo));
-        target.setTargetJRE(createTargetJRE(componentInfo));
-        target.setEnvironment(createEnvironment(targetVO));
-        target.setLocations(createLocations(targetVO));
+    private Target buildOneTarget(PipelineContext ctx, ResolvedComponent component) {
+        ComponentInfo info = ctx.componentInfo();
+        Target target = new Target();
+        target.setName(formatName(info.getTargetNameFormat(), component.name(), ctx.version()));
+        target.setIncludeMode(info.getTargetIncludeMode());
+        target.setSequenceNumber(info.getSequenceNumber());
+        target.setLauncherArgs(launcherArgs(info));
+        target.setTargetJRE(targetJre(info));
+        target.setEnvironment(environment(component));
+        target.setLocations(locations(ctx, component));
         return target;
     }
 
-    /**
-     * This method is used to create the launcher args
-     *
-     * @param componentInfo ComponentInfo
-     * @return LauncherArgs
-     */
-    private LauncherArgs createLauncherArgs(ComponentInfo componentInfo) {
-        LauncherArgs launcherArgs = new LauncherArgs();
-        launcherArgs.setProgramArgs(componentInfo.getProgramArguments());
-        launcherArgs.setVmArgs(componentInfo.getVmArguments());
-        return launcherArgs;
+    private static String targetFileName(PipelineContext ctx, String componentName) {
+        return formatName(ctx.targetSaveFormat(), componentName, ctx.version()) + ".target";
     }
 
-    /**
-     * This method is used to create the target name
-     *
-     * @param targetVO TargetVO
-     * @return String
-     */
-    private String createTargetName(TargetVO targetVO) {
-        String targetName = targetVO.getTargetName();
-        return TargetUtils.getTargetNameFormatted(targetVO, targetName);
+    private static String formatName(String pattern, String componentName, String version) {
+        if (pattern == null) {
+            return componentName + "_" + version;
+        }
+        return pattern
+                .replace(COMPONENT_PLACEHOLDER, componentName)
+                .replace(VERSION_PLACEHOLDER, version);
     }
 
+    private static LauncherArgs launcherArgs(ComponentInfo info) {
+        LauncherArgs args = new LauncherArgs();
+        args.setProgramArgs(info.getProgramArguments());
+        args.setVmArgs(info.getVmArguments());
+        return args;
+    }
 
-    /**
-     * This method is used to create the locations
-     *
-     * @param targetVO TargetVO
-     * @return Locations
-     */
-    private Locations createLocations(TargetVO targetVO) {
+    private static TargetJRE targetJre(ComponentInfo info) {
+        TargetJRE jre = new TargetJRE();
+        jre.setPath(info.getJrePath());
+        return jre;
+    }
+
+    private static Environment environment(ResolvedComponent component) {
+        Environment env = new Environment();
+        in.adarshr.targetgen.schema.input.Environment src = component.xml().getEnvironment();
+        if (src == null) {
+            return env;
+        }
+        env.setNl(src.getNl());
+        if (StringUtils.isNotEmpty(src.getArch())) {
+            env.setArch(ArchitectureType.fromValue(src.getArch()));
+        }
+        if (StringUtils.isNotEmpty(src.getOs())) {
+            env.setOs(OperatingSystem.fromValue(src.getOs()));
+        }
+        if (StringUtils.isNotEmpty(src.getWs())) {
+            env.setWs(src.getWs());
+        }
+        return env;
+    }
+
+    private Locations locations(PipelineContext ctx, ResolvedComponent component) {
         Locations locations = new Locations();
-        //Each location is a Repo
-        ComponentRepoVO componentRepo = targetVO.getComponentRepoMap().get(targetVO.getCurrentComponentName());
-        componentRepo.getRepos().forEach(repo -> locations.getLocation().add(createLocation(targetVO, repo)));
+        for (Repo repo : component.repos()) {
+            locations.getLocation().add(buildLocation(ctx, repo));
+        }
         return locations;
     }
 
-    /**
-     * This method is used to create the location
-     *
-     * @param targetVO TargetVO
-     * @param repo     Repo
-     * @return Location
-     */
-    private Location createLocation(TargetVO targetVO, in.adarshr.targetgen.bo.Repo repo) {
-        ComponentInfo componentInfo = targetVO.getComponentInfo();
-        Map<String, List<Repo>> repoMapList = targetVO.getRepoMapList();
-
+    private Location buildLocation(PipelineContext ctx, Repo repo) {
+        ComponentInfo info = ctx.componentInfo();
         Location location = new Location();
-        location.setIncludeMode(componentInfo.getLocationIncludeMode());
-        location.setType(componentInfo.getTargetLocationType());
-        location.setIncludeAllPlatforms(componentInfo.getIncludeAllPlatforms());
-        location.setIncludeConfigurePhase(componentInfo.getIncludeConfigurePhase());
+        location.setIncludeMode(info.getLocationIncludeMode());
+        location.setType(info.getTargetLocationType());
+        location.setIncludeAllPlatforms(info.getIncludeAllPlatforms());
+        location.setIncludeConfigurePhase(info.getIncludeConfigurePhase());
 
-        Set<in.adarshr.targetgen.bo.Unit> units = new HashSet<>();
-        targetVO.setUnitSet(units);
-        Map<Repo, List<in.adarshr.targetgen.bo.Unit>> repoUnitMap = targetVO.getRepoUnitMap();
-        List<Repo> repos = repoMapList.get(targetVO.getCurrentComponentName());
-        if (repos != null && !repos.isEmpty()) {
-            repos.forEach(currentRepo -> {
-                if (currentRepo != null && currentRepo.equals(repo)) {
-                    location.setRepository(createTargetRepository(currentRepo));
-                    if (repoUnitMap != null && repoUnitMap.get(currentRepo) != null) {
-                        repoUnitMap.get(currentRepo).forEach(unit -> {
-                                    if (filterUnit(unit, targetVO)) {
-                                        location.getUnit().add(createUnit(unit));
-                                    }else{
-                                        LOG.info("Unit is not valid, filtering: {}", unit);
+        RepositoryLocation repositoryLocation = new RepositoryLocation();
+        repositoryLocation.setLocation(RepoUrlResolver.stripContentJar(repo.getLocation()));
+        location.setRepository(repositoryLocation);
 
-                                    }
-                                }
-                        );
-                    }
-                } else {
-                    //LOG.error("Repo not found in the repo map list: {}", currentRepo);
-                }
-            });
+        List<Unit> units = ctx.repoUnits().getOrDefault(repo, List.of());
+        for (Unit unit : units) {
+            if (includeUnit(unit, info)) {
+                location.getUnit().add(toOutputUnit(unit));
+            } else {
+                log.debug("Filtering out unit: {}", unit);
+            }
         }
-        targetVO.setUnitSet(null); //To avoid issue of not adding units in other components
         return location;
     }
 
-    /**
-     * This method is used to filter the unit
-     *
-     * @param unit     in.adarshr.targetgen.bo.Unit
-     * @param targetVO TargetVO
-     * @return boolean
-     */
-    private boolean filterUnit(in.adarshr.targetgen.bo.Unit unit, TargetVO targetVO) {
-        SelectedGroups includeGroups = targetVO.getComponentInfo().getIncludeGroups();
-        SelectedGroups excludeGroups = targetVO.getComponentInfo().getExcludeGroups();
-        if (includeGroups != null && includeGroups.getGroup() != null && !includeGroups.getGroup().isEmpty()) {
-            return includeGroups.getGroup().stream().anyMatch(unit.getId()::contains);
+    private static in.adarshr.targetgen.schema.output.Unit toOutputUnit(Unit unit) {
+        in.adarshr.targetgen.schema.output.Unit out = new in.adarshr.targetgen.schema.output.Unit();
+        out.setId(unit.getId());
+        out.setVersion(unit.getVersion());
+        return out;
+    }
+
+    private static boolean includeUnit(Unit unit, ComponentInfo info) {
+        SelectedGroups include = info.getIncludeGroups();
+        if (include != null && include.getGroup() != null && !include.getGroup().isEmpty()) {
+            return include.getGroup().stream().anyMatch(unit.getId()::contains);
         }
-        if (excludeGroups != null && excludeGroups.getGroup() != null && !excludeGroups.getGroup().isEmpty()) {
-            boolean isMatched = excludeGroups.getGroup().stream().anyMatch(unit.getId()::contains);
-            return !isMatched;
-        }
-        if(targetVO.getComponentInfo().isRemoveDuplicates()){
-            return true;
+        SelectedGroups exclude = info.getExcludeGroups();
+        if (exclude != null && exclude.getGroup() != null && !exclude.getGroup().isEmpty()) {
+            return exclude.getGroup().stream().noneMatch(unit.getId()::contains);
         }
         return true;
-
-    }
-
-    /**
-     * This method is used to create the target repository
-     *
-     * @param currentRepo Repo
-     * @return RepositoryLocation
-     */
-    private RepositoryLocation createTargetRepository(Repo currentRepo) {
-        RepositoryLocation repositoryLocation = new RepositoryLocation();
-        repositoryLocation.setLocation(setLocationUrl(currentRepo.getLocation()));
-        return repositoryLocation;
-    }
-
-    /**
-     * This method is used to set the location url
-     *
-     * @param location String
-     * @return String
-     */
-    private String setLocationUrl(String location) {
-        return location.replace("content.jar", "");
-    }
-
-
-    /**
-     * This method is used to create the unit
-     *
-     * @param boUnit in.adarshr.targetgen.bo.Unit
-     * @return Unit
-     */
-    private Unit createUnit(in.adarshr.targetgen.bo.Unit boUnit) {
-        Unit unit = new Unit();
-        unit.setId(boUnit.getId());
-        unit.setVersion(boUnit.getVersion());
-        return unit;
-    }
-
-    /**
-     * This method is used to create the environment
-     *
-     * @param targetVO TargetVO
-     * @return Environment
-     */
-    private Environment createEnvironment(TargetVO targetVO) {
-        Environment environment = new Environment();
-        ComponentRepoVO componentRepoVO = targetVO.getComponentRepoMap().get(targetVO.getCurrentComponentName());
-        input.targetgen.adarshr.in.input.Environment environmentBo = componentRepoVO.getComponent().getEnvironment();
-        environment.setNl(environmentBo.getNl());
-        if(StringUtils.isNotEmpty(environmentBo.getArch())) {
-            environment.setArch(ArchitectureType.fromValue(environmentBo.getArch()));
-        }
-        if(StringUtils.isNotEmpty(environmentBo.getOs())) {
-            environment.setOs(OperatingSystem.fromValue(environmentBo.getOs()));
-        }
-        if(StringUtils.isNotEmpty(environmentBo.getWs())) {
-            environment.setWs(environmentBo.getWs());
-        }
-        return environment;
-    }
-
-    /**
-     * This method is used to create the target JRE
-     *
-     * @param componentInfo ComponentInfo
-     * @return TargetJRE
-     */
-    private TargetJRE createTargetJRE(ComponentInfo componentInfo) {
-        TargetJRE targetJRE = new TargetJRE();
-        targetJRE.setPath(componentInfo.getJrePath());
-        return targetJRE;
     }
 }

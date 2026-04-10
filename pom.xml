@@ -45,7 +45,7 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.18.30</version>
+            <version>1.18.38</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-api -->
         <dependency>
@@ -82,35 +82,55 @@
         <!-- https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter-api -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-api</artifactId>
+            <artifactId>junit-jupiter</artifactId>
             <version>5.10.2</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
     <build>
-        <finalName>${project.artifactId}</finalName> <!--Jar name. Optional field -->
-        <testSourceDirectory>src/test</testSourceDirectory>
+        <finalName>${project.artifactId}</finalName>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
             <plugin>
                 <groupId>org.jvnet.jaxb</groupId>
                 <artifactId>jaxb-maven-plugin</artifactId>
                 <version>4.0.0</version>
                 <executions>
                     <execution>
+                        <id>jaxb-input</id>
                         <goals>
                             <goal>generate</goal>
                         </goals>
+                        <configuration>
+                            <schemaDirectory>schema</schemaDirectory>
+                            <schemaIncludes>
+                                <include>input.xsd</include>
+                            </schemaIncludes>
+                            <generatePackage>in.adarshr.targetgen.schema.input</generatePackage>
+                            <generateDirectory>${project.build.directory}/generated-sources/jaxb-input</generateDirectory>
+                            <addCompileSourceRoot>true</addCompileSourceRoot>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>jaxb-output</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <configuration>
+                            <schemaDirectory>schema</schemaDirectory>
+                            <schemaIncludes>
+                                <include>output.xsd</include>
+                            </schemaIncludes>
+                            <generatePackage>in.adarshr.targetgen.schema.output</generatePackage>
+                            <generateDirectory>${project.build.directory}/generated-sources/jaxb-output</generateDirectory>
+                            <addCompileSourceRoot>true</addCompileSourceRoot>
+                        </configuration>
                     </execution>
                 </executions>
-                <configuration>
-                    <schemaDirectory>schema</schemaDirectory>
-                    <schemaIncludes>
-                        <include>input.xsd</include>
-                        <include>output.xsd</include>
-                    </schemaIncludes>
-                    <!--<generatePackage>in.adarshr.targetgen.data</generatePackage>-->
-                    <generateDirectory>${project.build.directory}/generated-sources/jaxb</generateDirectory>
-                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
