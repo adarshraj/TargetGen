@@ -52,12 +52,27 @@ java -jar target/targetgen-jar-with-dependencies.jar \
     --output output
 ```
 
-| Flag | Long form  | Default            | Description                                              |
-|------|------------|--------------------|----------------------------------------------------------|
-| `-i` | `--input`  | `input/input.xml`  | Path to the input XML                                    |
-| `-s` | `--schema` | `schema/input.xsd` | Path to the input XSD used for validation                |
-| `-o` | `--output` | `output`           | Directory the generated `.target` files are written to   |
-| `-h` | `--help`   |                    | Print usage and exit                                     |
+| Flag | Long form   | Default            | Description                                                                                           |
+|------|-------------|--------------------|-------------------------------------------------------------------------------------------------------|
+| `-i` | `--input`   | `input/input.xml`  | Path to the input XML                                                                                 |
+| `-s` | `--schema`  | `schema/input.xsd` | Path to the input XSD used for validation                                                             |
+| `-o` | `--output`  | `output`           | Directory the generated `.target` files are written to                                                |
+| `-c` | `--compare` |                    | Diff newly generated targets against previous `.target` files in this directory or single file       |
+| `-h` | `--help`    |                    | Print usage and exit                                                                                  |
+
+### Comparing minor-version updates
+
+Customers refreshing a target file for a new minor version typically want to see exactly what changed: which units got version-bumped, which were added or removed, and whether any repository URLs moved. Pass `--compare` pointing at the previous version's `.target` files (a directory or a single file) and the tool prints a per-component diff to stdout in addition to writing the new files.
+
+```
+java -jar target/targetgen-jar-with-dependencies.jar --compare ../previous-release/output
+```
+
+Match strategy: previous files are matched to current components by parsing the component name out of the new file's name via `targetSaveFormat`. So a current run that produces `BAG_ABC_28.1.target` will look for any `BAG_ABC_*.target` in the `--compare` directory. If multiple match, the lexicographically latest wins (so `28.0` beats `27.5`). Files in the `--compare` directory that don't match any current component are reported under "Removed components."
+
+Within a matched pair, locations are matched first by exact URL, then by URL where exactly one path segment differs (treated as a version bump). Units inside matching locations are diffed by `id`: same id with different version → bumped (`~`), id only on one side → added (`+`) or removed (`-`).
+
+The current report format is plain stdout text. The exit code is always 0; there is no "fail on diff" mode yet — let us know if your CI needs one.
 
 ## How a run works
 

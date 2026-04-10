@@ -28,7 +28,8 @@ public final class TargetGen {
             TargetGenApp.Config config = new TargetGenApp.Config(
                     Path.of(cli.getOptionValue("input", "input/input.xml")),
                     Path.of(cli.getOptionValue("schema", "schema/input.xsd")),
-                    Path.of(cli.getOptionValue("output", "output")));
+                    Path.of(cli.getOptionValue("output", "output")),
+                    cli.hasOption("compare") ? Path.of(cli.getOptionValue("compare")) : null);
             new TargetGenApp(config).run();
         } catch (ParseException e) {
             log.error("Invalid arguments: {}", e.getMessage());
@@ -51,6 +52,8 @@ public final class TargetGen {
                 .desc("Path to input XSD (default: schema/input.xsd)").build());
         options.addOption(Option.builder("o").longOpt("output").hasArg().argName("dir")
                 .desc("Output directory (default: output)").build());
+        options.addOption(Option.builder("c").longOpt("compare").hasArg().argName("path")
+                .desc("Diff newly generated targets against previous .target files in this directory or file").build());
         options.addOption(Option.builder("h").longOpt("help").desc("Show help").build());
         return options;
     }

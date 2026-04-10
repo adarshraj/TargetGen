@@ -2,6 +2,7 @@ package in.adarshr.targetgen;
 
 import in.adarshr.targetgen.build.TargetBuilder;
 import in.adarshr.targetgen.exception.TargetGenException;
+import in.adarshr.targetgen.model.ComparisonReport;
 import in.adarshr.targetgen.model.PipelineContext;
 import in.adarshr.targetgen.model.Repo;
 import in.adarshr.targetgen.model.Report;
@@ -15,6 +16,7 @@ import in.adarshr.targetgen.service.DeliveryReportLoader;
 import in.adarshr.targetgen.service.InputComponentResolver;
 import in.adarshr.targetgen.service.JarDownloader;
 import in.adarshr.targetgen.service.ReportComponentResolver;
+import in.adarshr.targetgen.service.TargetComparator;
 import in.adarshr.targetgen.service.TargetWriter;
 import in.adarshr.targetgen.utils.JaxbUtils;
 import jakarta.xml.bind.JAXBException;
@@ -30,7 +32,10 @@ import java.util.Set;
 @Slf4j
 public class TargetGenApp {
 
-    public record Config(Path inputXml, Path inputXsd, Path outputDir) {
+    public record Config(Path inputXml, Path inputXsd, Path outputDir, Path comparePath) {
+        public Config(Path inputXml, Path inputXsd, Path outputDir) {
+            this(inputXml, inputXsd, outputDir, null);
+        }
     }
 
     private final Config config;
@@ -60,6 +65,17 @@ public class TargetGenApp {
 
         PipelineContext ctx = new PipelineContext(componentInfo, components, repoUnits);
         Map<String, Target> targets = new TargetBuilder().buildTargets(ctx);
+
+        if (config.comparePath() != null) {
+            ComparisonReport report = new TargetComparator().compare(
+                    components,
+                    targets,
+                    componentInfo.getTargetSaveFormat(),
+                    componentInfo.getVersion(),
+                    config.comparePath());
+            System.out.println(report.format());
+        }
+
         new TargetWriter(config.outputDir()).writeAll(targets);
 
         log.info("All tasks completed; wrote {} target file(s)", targets.size());

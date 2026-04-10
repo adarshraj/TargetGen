@@ -48,7 +48,7 @@ The pipeline lives in `TargetGenApp.run()`. `TargetGen.main` only parses CLI arg
 - `in.adarshr.targetgen` — `TargetGen` (CLI entry, parses args only) and `TargetGenApp` (orchestration).
 - `in.adarshr.targetgen.model` — hand-written domain types: `Repo`, `Unit`, `Report` (mutable Lombok `@Data` classes), plus the immutable `PipelineContext` and `ResolvedComponent` records. Replaces the older `bo` / `dto` split.
 - `in.adarshr.targetgen.schema.input` / `.schema.output` — JAXB-generated. Do not edit; regenerate from XSDs in `schema/`.
-- `in.adarshr.targetgen.service` — `ComponentResolver` interface plus `InputComponentResolver`, `ReportComponentResolver`, `RepoUrlResolver`, `DeliveryReportLoader`, `JarDownloader`, `ContentXmlParser`, `TargetWriter`. All instance classes; testable in isolation.
+- `in.adarshr.targetgen.service` — `ComponentResolver` interface plus `InputComponentResolver`, `ReportComponentResolver`, `RepoUrlResolver`, `DeliveryReportLoader`, `JarDownloader`, `ContentXmlParser`, `TargetWriter`, `TargetComparator`, `PreviousTargetParser`. All instance classes; testable in isolation. `TargetComparator` is invoked by `TargetGenApp` only when `--compare` is passed and uses `PreviousTargetParser` (DOM-based, namespace-agnostic) to read previous `.target` files without going through JAXB — important because previously-written files have the output namespace stripped.
 - `in.adarshr.targetgen.build` — `TargetBuilder`. Pure function over `PipelineContext`.
 - `in.adarshr.targetgen.exception` — `TargetGenException`. Single catch site is in `TargetGen.main`.
 - `in.adarshr.targetgen.utils` — `JaxbUtils` (the only true stateless utility left).
